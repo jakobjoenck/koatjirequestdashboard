@@ -343,7 +343,9 @@ const SAMPLE_DATA = [
   { date:'2026-02-23', name:'Kelly Giles', email:'905cafedowntown@gmail.com', phone:'', website:'905cafedowntown.com', business:'The 905 Cafe', type:'COFFEE SHOP', country:'USA', state:'Florida', city:'Melbourne', message:'We are a boutique cafe specializing in food and coffee, est. 1997' }
 ];
 
-// ============ STATE NORMALIZATION ============
+// ============ STATE / COUNTRY / REGION NORMALIZATION ============
+
+// US state abbreviations → full names
 const STATE_ABBREVS = {
   'al':'Alabama','ak':'Alaska','az':'Arizona','ar':'Arkansas','ca':'California',
   'co':'Colorado','ct':'Connecticut','de':'Delaware','fl':'Florida','ga':'Georgia',
@@ -357,14 +359,158 @@ const STATE_ABBREVS = {
   'va':'Virginia','wa':'Washington','wv':'West Virginia','wi':'Wisconsin','wy':'Wyoming',
   'dc':'District Of Columbia',
   // Common alternate abbreviations
-  'fla':'Florida','tex':'Texas','calif':'California','penn':'Pennsylvania',
+  'fla':'Florida','tex':'Texas','calif':'California','penn':'Pennsylvania','penna':'Pennsylvania',
   'mich':'Michigan','minn':'Minnesota','wash':'Washington','conn':'Connecticut',
   'mass':'Massachusetts','tenn':'Tennessee','wisc':'Wisconsin','ore':'Oregon',
   'okla':'Oklahoma','colo':'Colorado','ariz':'Arizona','miss':'Mississippi',
   'ala':'Alabama','ind':'Indiana','neb':'Nebraska','kan':'Kansas',
+  // "State" suffix variants
+  'washington state':'Washington','new york state':'New York',
 };
 
-// Also build reverse map: full name → full name (for case normalization)
+// Canadian provinces
+const CA_PROVINCES = {
+  'bc':'British Columbia','ab':'Alberta','sk':'Saskatchewan','mb':'Manitoba',
+  'on':'Ontario','qc':'Quebec','nb':'New Brunswick','ns':'Nova Scotia',
+  'pe':'Prince Edward Island','nl':'Newfoundland And Labrador','yt':'Yukon',
+  'nt':'Northwest Territories','nu':'Nunavut',
+  'alta':'Alberta','ont':'Ontario','que':'Quebec','sask':'Saskatchewan',
+  'man':'Manitoba','pei':'Prince Edward Island',
+  'british columbia':'British Columbia','alberta':'Alberta','saskatchewan':'Saskatchewan',
+  'manitoba':'Manitoba','ontario':'Ontario','quebec':'Quebec','new brunswick':'New Brunswick',
+  'nova scotia':'Nova Scotia','prince edward island':'Prince Edward Island',
+  'newfoundland and labrador':'Newfoundland And Labrador','newfoundland':'Newfoundland And Labrador',
+  'yukon':'Yukon','northwest territories':'Northwest Territories','nunavut':'Nunavut',
+};
+
+// Australian states
+const AU_STATES = {
+  'nsw':'New South Wales','vic':'Victoria','qld':'Queensland','wa':'Western Australia',
+  'sa':'South Australia','tas':'Tasmania','act':'Australian Capital Territory',
+  'nt':'Northern Territory',
+  'new south wales':'New South Wales','victoria':'Victoria','queensland':'Queensland',
+  'western australia':'Western Australia','south australia':'South Australia',
+  'tasmania':'Tasmania','australian capital territory':'Australian Capital Territory',
+  'northern territory':'Northern Territory',
+};
+
+// International region normalization (variant → canonical)
+const REGION_NORMALIZE = {
+  // France
+  'ile de france':'Ile-de-France','il de france':'Ile-de-France','ile-de-france':'Ile-de-France',
+  'idf':'Ile-de-France','paris region':'Ile-de-France',
+  'provence alpes cote dazur':'Provence-Alpes-Cote d\'Azur','paca':'Provence-Alpes-Cote d\'Azur',
+  'nouvelle aquitaine':'Nouvelle-Aquitaine','occitanie':'Occitanie',
+  'auvergne rhone alpes':'Auvergne-Rhone-Alpes','hauts de france':'Hauts-de-France',
+  'grand est':'Grand Est','bretagne':'Bretagne','normandie':'Normandie',
+  // Taiwan
+  'taipei':'Taiwan','taipei city':'Taiwan','new taipei':'Taiwan','taichung':'Taiwan',
+  'kaohsiung':'Taiwan','tainan':'Taiwan','taiwan':'Taiwan',
+  // UK
+  'england':'England','scotland':'Scotland','wales':'Wales','northern ireland':'Northern Ireland',
+  'uk':'United Kingdom','united kingdom':'United Kingdom','great britain':'United Kingdom',
+  // Germany
+  'bayern':'Bavaria','bavaria':'Bavaria','nordrhein westfalen':'North Rhine-Westphalia',
+  'north rhine westphalia':'North Rhine-Westphalia','nrw':'North Rhine-Westphalia',
+  'baden wurttemberg':'Baden-Wurttemberg','baden wuerttemberg':'Baden-Wurttemberg',
+  'niedersachsen':'Lower Saxony','lower saxony':'Lower Saxony',
+  'hessen':'Hesse','hesse':'Hesse','sachsen':'Saxony','saxony':'Saxony',
+  // India
+  'karnataka':'Karnataka','maharashtra':'Maharashtra','tamil nadu':'Tamil Nadu',
+  'telangana':'Telangana','delhi':'Delhi','ncr':'Delhi',
+  // Japan
+  'tokyo':'Tokyo','osaka':'Osaka','kanto':'Kanto','kansai':'Kansai',
+  // Brazil
+  'sao paulo':'Sao Paulo','sp':'Sao Paulo','rj':'Rio De Janeiro','rio de janeiro':'Rio De Janeiro',
+  // Mexico
+  'cdmx':'Ciudad De Mexico','ciudad de mexico':'Ciudad De Mexico','df':'Ciudad De Mexico',
+  'estado de mexico':'Estado De Mexico','jalisco':'Jalisco','nuevo leon':'Nuevo Leon',
+  // UAE
+  'dubai':'Dubai','abu dhabi':'Abu Dhabi','sharjah':'Sharjah',
+  // South Korea
+  'seoul':'Seoul','gyeonggi':'Gyeonggi','busan':'Busan',
+  // Netherlands
+  'north holland':'North Holland','noord holland':'North Holland',
+  'south holland':'South Holland','zuid holland':'South Holland',
+  // Spain
+  'catalonia':'Catalonia','cataluna':'Catalonia','catalunya':'Catalonia',
+  'comunidad de madrid':'Madrid','madrid':'Madrid','andalusia':'Andalusia','andalucia':'Andalusia',
+  // Italy
+  'lombardia':'Lombardy','lombardy':'Lombardy','lazio':'Lazio','toscana':'Tuscany','tuscany':'Tuscany',
+};
+
+// Known countries — if these appear in the state field, move them to country
+const KNOWN_COUNTRIES = new Set([
+  'usa','united states','united states of america','us','u.s.','u.s.a.',
+  'canada','ca','mexico','mx','brazil','brasil','argentina','colombia','chile','peru',
+  'uk','united kingdom','great britain','england','scotland','wales','ireland',
+  'france','germany','deutschland','italy','italia','spain','espana','portugal',
+  'netherlands','holland','belgium','switzerland','austria','sweden','norway','denmark','finland',
+  'poland','czech republic','czechia','romania','hungary','greece','turkey','turkiye',
+  'russia','ukraine',
+  'china','japan','south korea','korea','north korea','india','pakistan','bangladesh',
+  'indonesia','malaysia','philippines','thailand','vietnam','singapore','taiwan',
+  'australia','new zealand',
+  'south africa','nigeria','kenya','egypt','morocco','ghana','ethiopia',
+  'saudi arabia','uae','united arab emirates','qatar','kuwait','bahrain','oman','israel',
+  'worldwide','global','international','remote','online','n/a','na','none','other',
+]);
+
+// Country name normalization
+const COUNTRY_NORMALIZE = {
+  'usa':'USA','us':'USA','u.s.':'USA','u.s.a.':'USA','united states':'USA','united states of america':'USA','america':'USA',
+  'uk':'UK','united kingdom':'UK','great britain':'UK','england':'UK','gb':'UK',
+  'canada':'Canada','ca':'Canada',
+  'mexico':'Mexico','mx':'Mexico',
+  'brazil':'Brazil','brasil':'Brazil','br':'Brazil',
+  'france':'France','fr':'France',
+  'germany':'Germany','deutschland':'Germany','de':'Germany',
+  'italy':'Italy','italia':'Italy','it':'Italy',
+  'spain':'Spain','espana':'Spain','es':'Spain',
+  'netherlands':'Netherlands','holland':'Netherlands','nl':'Netherlands',
+  'australia':'Australia','au':'Australia',
+  'new zealand':'New Zealand','nz':'New Zealand',
+  'japan':'Japan','jp':'Japan',
+  'china':'China','cn':'China',
+  'south korea':'South Korea','korea':'South Korea','kr':'South Korea',
+  'india':'India',
+  'taiwan':'Taiwan','tw':'Taiwan',
+  'singapore':'Singapore','sg':'Singapore',
+  'uae':'UAE','united arab emirates':'UAE',
+  'south africa':'South Africa','za':'South Africa',
+  'nigeria':'Nigeria','ng':'Nigeria',
+  'indonesia':'Indonesia',
+  'malaysia':'Malaysia','my':'Malaysia',
+  'philippines':'Philippines','ph':'Philippines',
+  'thailand':'Thailand','th':'Thailand',
+  'vietnam':'Vietnam','vn':'Vietnam',
+  'argentina':'Argentina','ar':'Argentina',
+  'colombia':'Colombia','co':'Colombia',
+  'chile':'Chile','cl':'Chile',
+  'peru':'Peru','pe':'Peru',
+  'switzerland':'Switzerland','ch':'Switzerland',
+  'sweden':'Sweden','se':'Sweden',
+  'norway':'Norway','no':'Norway',
+  'denmark':'Denmark','dk':'Denmark',
+  'finland':'Finland','fi':'Finland',
+  'belgium':'Belgium','be':'Belgium',
+  'austria':'Austria','at':'Austria',
+  'poland':'Poland','pl':'Poland',
+  'portugal':'Portugal','pt':'Portugal',
+  'ireland':'Ireland','ie':'Ireland',
+  'israel':'Israel','il':'Israel',
+  'saudi arabia':'Saudi Arabia','sa':'Saudi Arabia',
+  'egypt':'Egypt','eg':'Egypt',
+  'turkey':'Turkey','turkiye':'Turkey','tr':'Turkey',
+  'russia':'Russia','ru':'Russia',
+  'ukraine':'Ukraine','ua':'Ukraine',
+  'kenya':'Kenya','ke':'Kenya',
+  'morocco':'Morocco','ma':'Morocco',
+  'qatar':'Qatar','qa':'Qatar',
+  'remote':'Remote','online':'Remote','worldwide':'Remote','global':'Remote',
+};
+
+// Build full name lookup for US states
 const STATE_FULLNAMES = {};
 Object.values(STATE_ABBREVS).forEach(name => {
   STATE_FULLNAMES[name.toLowerCase()] = name;
@@ -373,19 +519,66 @@ Object.values(STATE_ABBREVS).forEach(name => {
 function normalizeState(s) {
   if (!s) return '';
   const trimmed = s.trim();
-  const lower = trimmed.toLowerCase().replace(/\./g, ''); // remove dots like "N.Y."
-  // Check abbreviation
+  const lower = trimmed.toLowerCase().replace(/\./g, '').replace(/\s+/g, ' ');
+
+  // Check US abbreviation
   if (STATE_ABBREVS[lower]) return STATE_ABBREVS[lower];
-  // Check full name (case normalize)
+  // Check US full name
   if (STATE_FULLNAMES[lower]) return STATE_FULLNAMES[lower];
+  // Check Canadian provinces
+  if (CA_PROVINCES[lower]) return CA_PROVINCES[lower];
+  // Check Australian states
+  if (AU_STATES[lower]) return AU_STATES[lower];
+  // Check international regions
+  if (REGION_NORMALIZE[lower]) return REGION_NORMALIZE[lower];
+
   // Return title-cased original
   return trimmed.replace(/\w\S*/g, t => t.charAt(0).toUpperCase() + t.substr(1).toLowerCase());
 }
 
+function normalizeCountry(c) {
+  if (!c) return '';
+  const lower = c.trim().toLowerCase().replace(/\./g, '');
+  if (COUNTRY_NORMALIZE[lower]) return COUNTRY_NORMALIZE[lower];
+  // Title case
+  return c.trim().replace(/\w\S*/g, t => t.charAt(0).toUpperCase() + t.substr(1).toLowerCase());
+}
+
 function normalizeRecord(d) {
+  // First: check if the state field actually contains a country name
+  if (d.state) {
+    const stateLower = d.state.trim().toLowerCase().replace(/\./g, '');
+    if (KNOWN_COUNTRIES.has(stateLower)) {
+      // Move it to country if country is empty, otherwise just clear it
+      if (!d.country || d.country.trim() === '') {
+        d.country = d.state.trim();
+      }
+      d.state = '';
+    }
+  }
+
+  // Normalize country
+  d.country = normalizeCountry(d.country);
+
+  // Normalize state/province/region
   d.state = normalizeState(d.state);
-  // Also title-case city for consistency
-  if (d.city) d.city = d.city.trim().replace(/\w\S*/g, t => t.charAt(0).toUpperCase() + t.substr(1).toLowerCase());
+
+  // Title-case city for consistency
+  if (d.city) {
+    d.city = d.city.trim().replace(/\w\S*/g, t => t.charAt(0).toUpperCase() + t.substr(1).toLowerCase());
+  }
+
+  // If state is a known Taiwanese city, set state to Taiwan
+  const taiwanCities = ['taipei','new taipei','taichung','kaohsiung','tainan','hsinchu','keelung','taoyuan'];
+  if (d.state && taiwanCities.includes(d.state.toLowerCase())) {
+    if (!d.city || d.city.trim() === '') d.city = d.state;
+    d.state = 'Taiwan';
+    if (!d.country) d.country = 'Taiwan';
+  }
+
+  // Normalize business type casing
+  if (d.type) d.type = d.type.trim().toUpperCase();
+
   return d;
 }
 
