@@ -192,6 +192,10 @@
     <input type="date" id="dateTo" onchange="applyFilters()" style="background:var(--card);border:1px solid var(--border);color:var(--text);padding:8px;border-radius:8px;">
   </div>
   <div class="control-group">
+    <label>Country:</label>
+    <select id="countryFilter" onchange="applyFilters()"><option value="all">All Countries</option></select>
+  </div>
+  <div class="control-group">
     <label>State:</label>
     <select id="stateFilter" onchange="applyFilters()"><option value="all">All States</option></select>
   </div>
@@ -210,8 +214,9 @@
 
 <div class="kpi-row">
   <div class="kpi"><div class="kpi-label">Total Requests</div><div class="kpi-value kpi-accent" id="kpiTotal">0</div><div class="kpi-sub" id="kpiTotalSub">filtered</div></div>
-  <div class="kpi"><div class="kpi-label">Unique States</div><div class="kpi-value kpi-green" id="kpiStates">0</div><div class="kpi-sub" id="kpiStatesSub">—</div></div>
-  <div class="kpi"><div class="kpi-label">Unique Cities</div><div class="kpi-value kpi-warning" id="kpiCities">0</div><div class="kpi-sub" id="kpiCitiesSub">—</div></div>
+  <div class="kpi"><div class="kpi-label">Countries</div><div class="kpi-value" id="kpiCountries" style="color:#06b6d4;">0</div><div class="kpi-sub" id="kpiCountriesSub">—</div></div>
+  <div class="kpi"><div class="kpi-label">States / Regions</div><div class="kpi-value kpi-green" id="kpiStates">0</div><div class="kpi-sub" id="kpiStatesSub">—</div></div>
+  <div class="kpi"><div class="kpi-label">Cities</div><div class="kpi-value kpi-warning" id="kpiCities">0</div><div class="kpi-sub" id="kpiCitiesSub">—</div></div>
   <div class="kpi"><div class="kpi-label">This Week</div><div class="kpi-value" id="kpiWeek">0</div><div class="kpi-sub" id="kpiWeekSub">new requests</div></div>
 </div>
 
@@ -584,6 +589,14 @@ function normalizeRecord(d) {
 
 function normalizeAllData() {
   DATA.forEach(d => normalizeRecord(d));
+  // Deduplicate by name+email+date
+  const seen = new Set();
+  DATA = DATA.filter(d => {
+    const key = `${(d.name||'').toLowerCase()}|${(d.email||'').toLowerCase()}|${d.date}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function saveData() {
@@ -593,6 +606,7 @@ function saveData() {
 // ============ FILTERS ============
 function applyFilters() {
   const tv = document.getElementById('timeView').value;
+  const cof = document.getElementById('countryFilter').value;
   const sf = document.getElementById('stateFilter').value;
   const cf = document.getElementById('cityFilter').value;
   const tf = document.getElementById('typeFilter').value;
@@ -624,6 +638,7 @@ function applyFilters() {
     const dd = new Date(d.date);
     if (startDate && dd < startDate) return false;
     if (endDate && dd > endDate) return false;
+    if (cof !== 'all' && (d.country||'').toLowerCase() !== cof.toLowerCase()) return false;
     if (sf !== 'all' && d.state.toLowerCase() !== sf.toLowerCase()) return false;
     if (cf !== 'all' && d.city.toLowerCase() !== cf.toLowerCase()) return false;
     if (tf !== 'all' && d.type.toLowerCase() !== tf.toLowerCase()) return false;
@@ -652,10 +667,12 @@ function applyFilters() {
 }
 
 function populateDropdowns() {
-  const states = [...new Set(DATA.map(d => d.state))].sort();
-  const cities = [...new Set(DATA.map(d => d.city))].sort();
-  const types = [...new Set(DATA.map(d => d.type))].sort();
+  const countries = [...new Set(DATA.map(d => d.country).filter(Boolean))].sort();
+  const states = [...new Set(DATA.map(d => d.state).filter(Boolean))].sort();
+  const cities = [...new Set(DATA.map(d => d.city).filter(Boolean))].sort();
+  const types = [...new Set(DATA.map(d => d.type).filter(Boolean))].sort();
 
+  setOptions('countryFilter', countries);
   setOptions('stateFilter', states);
   setOptions('cityFilter', cities);
   setOptions('typeFilter', types);
@@ -673,7 +690,11 @@ function updateKPIs() {
   document.getElementById('kpiTotal').textContent = filtered.length;
   document.getElementById('kpiTotalSub').textContent = filtered.length === DATA.length ? 'total' : `of ${DATA.length} total`;
 
-  const states = [...new Set(filtered.map(d=>d.state))];
+  const countries = [...new Set(filtered.map(d=>d.country).filter(Boolean))];
+  document.getElementById('kpiCountries').textContent = countries.length;
+  document.getElementById('kpiCountriesSub').textContent = countries.slice(0,3).join(', ') + (countries.length>3 ? '...' : '');
+
+  const states = [...new Set(filtered.map(d=>d.state).filter(Boolean))];
   document.getElementById('kpiStates').textContent = states.length;
   document.getElementById('kpiStatesSub').textContent = states.slice(0,3).join(', ') + (states.length>3 ? '...' : '');
 
