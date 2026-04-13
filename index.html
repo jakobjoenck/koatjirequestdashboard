@@ -1306,10 +1306,12 @@ function readFile(file) {
 
 // ============ GOOGLE SHEET AUTO-SYNC ============
 
+const DEFAULT_WEBAPP_URL = 'https://script.google.com/macros/s/AKfycbzRd5JPxVkNiEMwztV_L2FnamImcBPpAuIq7bUb7lDa8TJ1zMBx6yRL6Xp2Uf-Aruz5ng/exec';
+
 function toggleSettings() {
   document.getElementById('settingsPanel').classList.toggle('active');
   // Load saved URL into input
-  const saved = localStorage.getItem('koatji_webapp_url');
+  const saved = localStorage.getItem('koatji_webapp_url') || DEFAULT_WEBAPP_URL;
   if (saved) document.getElementById('webAppUrl').value = saved;
 }
 
@@ -1326,7 +1328,7 @@ function saveSettingsAndSync() {
 }
 
 function syncFromSheet() {
-  const url = localStorage.getItem('koatji_webapp_url');
+  const url = localStorage.getItem('koatji_webapp_url') || DEFAULT_WEBAPP_URL;
   const statusEl = document.getElementById('syncStatus');
 
   if (!url) {
@@ -1409,11 +1411,8 @@ function init() {
   applyFilters();
   document.getElementById('lastUpdated').textContent = 'Last updated: ' + new Date().toLocaleDateString('en-US', {month:'short',day:'numeric',year:'numeric',hour:'2-digit',minute:'2-digit'});
 
-  // Auto-sync if a Web App URL is saved
-  const syncUrl = localStorage.getItem('koatji_webapp_url');
-  if (syncUrl) {
-    syncFromSheet(); // Runs in background, updates dashboard when done
-  }
+  // Auto-sync — uses hardcoded URL or any user-saved override
+  syncFromSheet();
 }
 
 init();
